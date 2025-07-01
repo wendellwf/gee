@@ -1,3 +1,4 @@
+// Package gee: this is context
 package gee
 
 import (
@@ -6,7 +7,7 @@ import (
 	"net/http"
 )
 
-type H map[string]interface{}
+type H map[string]any
 
 type Context struct {
 	// origin objects
@@ -18,6 +19,9 @@ type Context struct {
 	param  map[string]string
 	// response info
 	statusCode int
+	// middleware
+	handlers []HandlerFunc
+	index    int
 }
 
 func NewContext(w http.ResponseWriter, r *http.Request) *Context {
@@ -26,12 +30,20 @@ func NewContext(w http.ResponseWriter, r *http.Request) *Context {
 		r:      r,
 		method: r.Method,
 		path:   r.URL.Path,
+		index:  -1,
+	}
+}
+
+func (c *Context) Next() {
+	c.index++
+	s := len(c.handlers)
+	for ; c.index < s; c.index++ {
+		c.handlers[c.index](c)
 	}
 }
 
 func (c *Context) Param(key string) string {
-	value, _ := c.param[key]
-	return value
+	return c.param[key]
 }
 
 func (c *Context) FormValue(key string) string {
@@ -45,6 +57,14 @@ func (c *Context) Query(key string) string {
 func (c *Context) Status(code int) {
 	c.statusCode = code
 	c.w.WriteHeader(code)
+}
+
+func (c *Context) GetStatus() int {
+	return c.statusCode
+}
+
+func (c *Context) GetReq() *http.Request {
+	return c.r
 }
 
 func (c *Context) SetHeader(key, value string) {
@@ -76,6 +96,12 @@ func (c *Context) HTML(code int, html string) {
 	c.SetHeader("Content-Type", "text/html")
 	c.Status(code)
 	c.w.Write([]byte(html))
+}
+
+func (c *Context) Fail(code int, context string) {
+	c.SetHeader("Content-Type", "text/html")
+	c.Status(code)
+	c.w.Write([]byte(context))
 }
 
 func (c *Context) Path() string {
